@@ -1,0 +1,48 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="heroGradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:0.6" />
+    </linearGradient>
+    <linearGradient id="heroGradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.7" />
+    </linearGradient>
+  </defs>
+  
+  <!-- 배경 원들 -->
+  <circle cx="80" cy="80" r="60" fill="url(#heroGradient1)" opacity="0.3"/>
+  <circle cx="320" cy="120" r="80" fill="url(#heroGradient1)" opacity="0.2"/>
+  <circle cx="200" cy="200" r="100" fill="url(#heroGradient1)" opacity="0.1"/>
+  
+  <!-- 의료진 캐릭터 -->
+  <circle cx="200" cy="120" r="40" fill="url(#heroGradient2)"/>
+  <rect x="180" y="160" width="40" height="60" fill="url(#heroGradient2)" rx="20"/>
+  
+  <!-- 의료 십자가 -->
+  <rect x="190" y="100" width="20" height="40" fill="url(#heroGradient1)" rx="10"/>
+  <rect x="170" y="120" width="60" height="20" fill="url(#heroGradient1)" rx="10"/>
+  
+  <!-- 교육 책들 -->
+  <rect x="100" y="180" width="30" height="40" fill="url(#heroGradient2)" rx="5"/>
+  <rect x="105" y="185" width="20" height="30" fill="url(#heroGradient1)" opacity="0.6" rx="3"/>
+  
+  <rect x="270" y="180" width="30" height="40" fill="url(#heroGradient2)" rx="5"/>
+  <rect x="275" y="185" width="20" height="30" fill="url(#heroGradient1)" opacity="0.6" rx="3"/>
+  
+  <!-- AI/분석 아이콘들 -->
+  <circle cx="120" cy="100" r="15" fill="url(#heroGradient2)"/>
+  <circle cx="120" cy="100" r="8" fill="url(#heroGradient1)"/>
+  <circle cx="120" cy="100" r="3" fill="white"/>
+  
+  <circle cx="280" cy="100" r="15" fill="url(#heroGradient2)"/>
+  <rect x="275" y="95" width="10" height="10" fill="url(#heroGradient1)" rx="2"/>
+  
+  <!-- 차트/그래프 -->
+  <rect x="150" y="240" width="100" height="40" fill="url(#heroGradient2)" rx="5"/>
+  <rect x="160" y="250" width="8" height="20" fill="url(#heroGradient1)" rx="2"/>
+  <rect x="175" y="245" width="8" height="25" fill="url(#heroGradient1)" rx="2"/>
+  <rect x="190" y="235" width="8" height="35" fill="url(#heroGradient1)" rx="2"/>
+  <rect x="205" y="250" width="8" height="20" fill="url(#heroGradient1)" rx="2"/>
+  <rect x="220" y="240" width="8" height="30" fill="url(#heroGradient1)" rx="2"/>
+</svg>
