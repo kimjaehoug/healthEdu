@@ -38,11 +38,20 @@ export interface Upload {
   reviewDate?: string;
 }
 
-// 유사한 점의 구조화된 데이터 타입
+// 유사한 점의 구조화된 데이터 타입 (기존)
 export interface SimilarPoint {
   uploadedContent: string;
   existingContent: string;
   similarity: number;
+}
+
+// 새로운 API 응답 구조의 유사한 점 데이터 타입
+export interface NewSimilarPoint {
+  rationale: string;
+  uploadedContent: string;
+  existingContent: string;
+  confidence: number;
+  docId: string;
 }
 
 export interface ReviewResult {
@@ -52,8 +61,8 @@ export interface ReviewResult {
   subjectName: string;
   similarityScore: number;
   isSimilar: boolean;
-  criteriaScores: Record<string, number>;
-  similarPoints: (string | SimilarPoint)[]; // 기존 문자열과 새로운 구조화된 데이터 모두 지원
+  criteriaScores: Record<string, number | string>;
+  similarPoints: (string | SimilarPoint | NewSimilarPoint)[]; // 기존 문자열과 새로운 구조화된 데이터 모두 지원
   differentPoints: string[];
   recommendations: string[];
   createdAt: string;

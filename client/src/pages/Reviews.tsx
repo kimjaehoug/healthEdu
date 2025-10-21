@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 import { reviewAPI } from '../services/api';
-import { ReviewResult, SimilarPoint } from '../types';
+import { ReviewResult, SimilarPoint, NewSimilarPoint } from '../types';
 import { Card, Container, Button, Spinner, ErrorMessage } from '../styles/GlobalStyles';
 
 // API 응답 타입 정의 (현재 사용하지 않음)
@@ -227,12 +227,13 @@ const ReviewDate = styled.div`
   font-weight: 500;
 `;
 
-const SimilarityScore = styled.div<{ score: number }>`
-  background: ${props => 
-    props.score >= 80 ? 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)' : 
-    props.score >= 70 ? 'linear-gradient(135deg, #ed8936 0%, #dd6b20 100%)' : 
-    'linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%)'
-  };
+const SimilarityScore = styled.div<{ score: number | string }>`
+  background: ${props => {
+    const numScore = typeof props.score === 'number' ? props.score : 0;
+    return numScore >= 80 ? 'linear-gradient(135deg, #48bb78 0%, #38a169 100%)' : 
+           numScore >= 70 ? 'linear-gradient(135deg, #ed8936 0%, #dd6b20 100%)' : 
+           'linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%)';
+  }};
   color: white;
   padding: 10px 20px;
   border-radius: 25px;
@@ -329,17 +330,23 @@ const CriteriaName = styled.div`
   margin-bottom: 6px;
 `;
 
-const CriteriaScore = styled.div<{ score: number; criteria?: string }>`
+const CriteriaScore = styled.div<{ score: number | string; criteria?: string }>`
   font-size: 20px;
   font-weight: 700;
   color: ${props => {
+    // 교과목 목적의 유사성의 경우 특별 처리
+    if (props.criteria === '교과목 목적의 유사성') {
+      return props.score === '유사함' ? '#48bb78' : '#ff6b6b';
+    }
     // 매칭 청크 수의 경우 특별 처리 (5개 이상이면 인정)
     if (props.criteria === '매칭 청크 수') {
-      return props.score >= 5 ? '#48bb78' : '#ff6b6b';
+      const numScore = typeof props.score === 'number' ? props.score : 0;
+      return numScore >= 5 ? '#48bb78' : '#ff6b6b';
     }
     // 다른 기준들은 기존 로직
-    return props.score >= 80 ? '#48bb78' : 
-           props.score >= 70 ? '#ed8936' : '#ff6b6b';
+    const numScore = typeof props.score === 'number' ? props.score : 0;
+    return numScore >= 80 ? '#48bb78' : 
+           numScore >= 70 ? '#ed8936' : '#ff6b6b';
   }};
 `;
 
@@ -626,14 +633,18 @@ const Reviews: React.FC = () => {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <SimilarityScore score={review.criteriaScores['내용 유사도'] !== undefined ? review.criteriaScores['내용 유사도'] : review.similarityScore}>
+                        <SimilarityScore score={(() => {
+                          const contentSimilarity = review.criteriaScores['내용 유사도'];
+                          return contentSimilarity !== undefined ? Number(contentSimilarity) : review.similarityScore;
+                        })()}>
                           {(() => {
                             const contentSimilarity = review.criteriaScores['내용 유사도'];
                             console.log('Review criteriaScores:', review.criteriaScores);
                             console.log('Content similarity:', contentSimilarity);
                             // 내용 유사도가 undefined가 아닌 경우 (0이어도 포함) 사용
-                            return contentSimilarity !== undefined ? contentSimilarity : review.similarityScore;
-                          })()}%
+                            const score = contentSimilarity !== undefined ? Number(contentSimilarity) : review.similarityScore;
+                            return `${score}%`;
+                          })()}
                         </SimilarityScore>
                         <DeleteButton 
                           disabled={deletingId === review.id}
@@ -654,7 +665,9 @@ const Reviews: React.FC = () => {
                         <CriteriaItem key={criteria}>
                           <CriteriaName>{criteria}</CriteriaName>
                           <CriteriaScore score={score} criteria={criteria}>
-                            {criteria === '매칭 청크 수' ? `${score}개` : `${score}점`}
+                            {criteria === '매칭 청크 수' ? `${score}개` : 
+                             criteria === '교과목 목적의 유사성' ? score : 
+                             `${score}점`}
                           </CriteriaScore>
                         </CriteriaItem>
                       ))}
@@ -670,17 +683,190 @@ const Reviews: React.FC = () => {
                     {/* 상세 내용 - 접기/펼치기 */}
                     {expandedReviews.has(review.id) && (
                       <>
-                        {review.similarPoints.length > 0 && (
+                        {/* 디버깅: similarPoints 내용 확인 */}
+                        {(() => {
+                          console.log('🔍 Review similarPoints:', review.similarPoints);
+                          console.log('🔍 Review similarPoints length:', review.similarPoints.length);
+                          console.log('🔍 Review similarPoints type:', typeof review.similarPoints);
+                          return null;
+                        })()}
+                        
+                        {review.similarPoints.length > 0 ? (
                           <ContentSection>
                         <h4>
                           <span style={{ marginRight: '8px' }}>✅</span>
-                          유사한 점 ({review.similarPoints.length}개)
+                          교과목 목적의 유사성 ({review.similarPoints.length}개)
                         </h4>
                         <ul>
                           {review.similarPoints.map((point, index) => {
+                            // 디버깅 로그
                             console.log('Similar point:', point, 'Type:', typeof point);
-                            // 구조화된 데이터인지 확인
-                            if (typeof point === 'object' && 'uploadedContent' in point && 'existingContent' in point) {
+                            console.log('Similar point keys:', point && typeof point === 'object' ? Object.keys(point) : 'not object');
+                            
+                            // 새로운 API 응답 구조 (NewSimilarPoint) - queryPreview가 없는 새로운 구조
+                            if (typeof point === 'object' && 'rationale' in point && 'uploadedContent' in point && 'existingContent' in point && !('queryPreview' in point)) {
+                              const newSimilarPoint = point as NewSimilarPoint;
+                              return (
+                                <li key={index} style={{ 
+                                  background: 'rgba(72, 187, 120, 0.05)',
+                                  borderLeft: '4px solid #48bb78',
+                                  padding: '16px',
+                                  borderRadius: '8px',
+                                  marginBottom: '12px'
+                                }}>
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '12px',
+                                    fontSize: '14px'
+                                  }}>
+                                    <div style={{ 
+                                      background: 'rgba(72, 187, 120, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(72, 187, 120, 0.2)'
+                                    }}>
+                                      <strong style={{ color: '#2d3748', fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                                        🎯 판단 근거:
+                                      </strong>
+                                      <div style={{ color: '#2d3748', lineHeight: '1.5' }}>
+                                        {newSimilarPoint.rationale}
+                                      </div>
+                                    </div>
+                                    
+                                    <div style={{ 
+                                      background: 'rgba(72, 187, 120, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(72, 187, 120, 0.2)'
+                                    }}>
+                                      <strong style={{ color: '#2d3748', fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                                        📤 업로드한 문서:
+                                      </strong>
+                                      <div style={{ 
+                                        color: '#2d3748', 
+                                        lineHeight: '1.5',
+                                        whiteSpace: 'pre-wrap',
+                                        fontFamily: 'monospace',
+                                        fontSize: '13px'
+                                      }}>
+                                        {newSimilarPoint.uploadedContent}
+                                      </div>
+                                    </div>
+                                    
+                                    <div style={{ 
+                                      background: 'rgba(102, 126, 234, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(102, 126, 234, 0.2)'
+                                    }}>
+                                      <strong style={{ color: '#2d3748', fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                                        📚 매칭된 기존 문서:
+                                      </strong>
+                                      <div style={{ 
+                                        color: '#2d3748', 
+                                        lineHeight: '1.5',
+                                        whiteSpace: 'pre-wrap',
+                                        fontFamily: 'monospace',
+                                        fontSize: '13px'
+                                      }}>
+                                        {newSimilarPoint.existingContent}
+                                      </div>
+                                    </div>
+                                    
+                                    <div style={{ 
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      background: 'rgba(72, 187, 120, 0.1)',
+                                      padding: '8px 12px',
+                                      borderRadius: '6px',
+                                      fontSize: '12px'
+                                    }}>
+                                      <span style={{ fontWeight: '600', color: '#48bb78' }}>
+                                        신뢰도: {newSimilarPoint.confidence}%
+                                      </span>
+                                      <span style={{ color: '#4a5568', fontSize: '11px' }}>
+                                        {newSimilarPoint.docId}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </li>
+                              );
+                            }
+                            // 기존 API 응답 구조 (queryPreview가 있는 구조) - 임시 처리
+                            else if (typeof point === 'object' && 'rationale' in point && 'queryPreview' in point && 'confidence' in point) {
+                              const oldSimilarPoint = point as any;
+                              return (
+                                <li key={index} style={{ 
+                                  background: 'rgba(255, 165, 0, 0.05)',
+                                  borderLeft: '4px solid #ffa500',
+                                  padding: '16px',
+                                  borderRadius: '8px',
+                                  marginBottom: '12px'
+                                }}>
+                                  <div style={{ 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '12px',
+                                    fontSize: '14px'
+                                  }}>
+                                    <div style={{ 
+                                      background: 'rgba(255, 165, 0, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(255, 165, 0, 0.2)'
+                                    }}>
+                                      <strong style={{ color: '#2d3748', fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                                        🎯 판단 근거:
+                                      </strong>
+                                      <div style={{ color: '#2d3748', lineHeight: '1.5' }}>
+                                        {oldSimilarPoint.rationale}
+                                      </div>
+                                    </div>
+                                    
+                                    <div style={{ 
+                                      background: 'rgba(255, 165, 0, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(255, 165, 0, 0.2)'
+                                    }}>
+                                      <strong style={{ color: '#2d3748', fontSize: '13px', display: 'block', marginBottom: '6px' }}>
+                                        📄 매칭된 내용 (구형 데이터):
+                                      </strong>
+                                      <div style={{ 
+                                        color: '#2d3748', 
+                                        lineHeight: '1.5',
+                                        whiteSpace: 'pre-wrap',
+                                        fontFamily: 'monospace',
+                                        fontSize: '13px'
+                                      }}>
+                                        {oldSimilarPoint.queryPreview}
+                                      </div>
+                                    </div>
+                                    
+                                    <div style={{ 
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      background: 'rgba(255, 165, 0, 0.1)',
+                                      padding: '8px 12px',
+                                      borderRadius: '6px',
+                                      fontSize: '12px'
+                                    }}>
+                                      <span style={{ fontWeight: '600', color: '#ffa500' }}>
+                                        신뢰도: {oldSimilarPoint.confidence}%
+                                      </span>
+                                      <span style={{ color: '#4a5568', fontSize: '11px' }}>
+                                        {oldSimilarPoint.docId}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </li>
+                              );
+                            }
+                            // 기존 구조화된 데이터 (SimilarPoint)
+                            else if (typeof point === 'object' && 'uploadedContent' in point && 'existingContent' in point && !('rationale' in point)) {
                               const similarPoint = point as SimilarPoint;
                               return (
                                 <li key={index} style={{ 
@@ -729,43 +915,73 @@ const Reviews: React.FC = () => {
                                 </li>
                               );
                             } else {
-                              // 기존 문자열 형태
+                              // 기존 문자열 형태 또는 알 수 없는 형태
+                              console.warn('Unknown similarPoint type:', point);
                               return (
-                                <li key={index}>{point}</li>
+                                <li key={index} style={{ 
+                                  background: 'rgba(255, 0, 0, 0.05)',
+                                  borderLeft: '4px solid #ff0000',
+                                  padding: '16px',
+                                  borderRadius: '8px',
+                                  marginBottom: '12px'
+                                }}>
+                                  <div style={{ color: '#ff0000', fontSize: '14px' }}>
+                                    알 수 없는 데이터 형태: {typeof point === 'string' ? point : JSON.stringify(point)}
+                                  </div>
+                                </li>
                               );
                             }
                           })}
                         </ul>
                       </ContentSection>
-                    )}
-
-                        {review.differentPoints.length > 0 && (
+                        ) : (
                           <ContentSection>
                             <h4>
-                              <span style={{ marginRight: '8px' }}>⚠️</span>
-                              개선이 필요한 점
+                              <span style={{ marginRight: '8px' }}>❌</span>
+                              교과목 목적의 유사성 - 비유사 항목
                             </h4>
-                            <ul>
-                              {review.differentPoints.map((point, index) => (
-                                <li key={index}>{point}</li>
-                              ))}
-                            </ul>
+                            {review.differentPoints.length > 0 ? (
+                              <ul>
+                                {review.differentPoints.map((point, index) => (
+                                  <li key={index} style={{ 
+                                    background: 'rgba(255, 107, 107, 0.05)',
+                                    borderLeft: '4px solid #ff6b6b',
+                                    padding: '16px',
+                                    borderRadius: '8px',
+                                    marginBottom: '12px'
+                                  }}>
+                                    <div style={{ 
+                                      background: 'rgba(255, 107, 107, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      border: '1px solid rgba(255, 107, 107, 0.2)'
+                                    }}>
+                                      <div style={{ 
+                                        color: '#2d3748', 
+                                        lineHeight: '1.5',
+                                        fontSize: '14px'
+                                      }}>
+                                        {point}
+                                      </div>
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <div style={{ 
+                                background: 'rgba(255, 107, 107, 0.1)',
+                                padding: '20px',
+                                borderRadius: '8px',
+                                border: '1px solid rgba(255, 107, 107, 0.2)',
+                                textAlign: 'center',
+                                color: '#2d3748'
+                              }}>
+                                비유사 항목에 대한 상세 정보가 없습니다.
+                              </div>
+                            )}
                           </ContentSection>
                         )}
 
-                        {review.recommendations.length > 0 && (
-                          <ContentSection>
-                            <h4>
-                              <span style={{ marginRight: '8px' }}>💡</span>
-                              권고사항
-                            </h4>
-                            <ul>
-                              {review.recommendations.map((recommendation, index) => (
-                                <li key={index}>{recommendation}</li>
-                              ))}
-                            </ul>
-                          </ContentSection>
-                        )}
                       </>
                     )}
                   </ReviewContent>

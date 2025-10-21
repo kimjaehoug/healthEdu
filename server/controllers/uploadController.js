@@ -277,6 +277,39 @@ const cleanTextForDisplay = (text) => {
   return cleaned;
 };
 
+// query_view_preview를 업로드 일부와 매칭 문서 일부로 분리하는 함수
+const parseQueryPreview = (queryPreview) => {
+  if (!queryPreview) return { uploaded: '', existing: '' };
+  
+  // [업로드 일부]와 [매칭 문서 일부] 기준으로 분리
+  const parts = queryPreview.split(/(?=\[매칭 문서 일부\])/);
+  
+  let uploaded = '';
+  let existing = '';
+  
+  if (parts.length >= 1) {
+    // 첫 번째 부분에서 [업로드 일부] 내용 추출
+    const uploadedMatch = parts[0].match(/\[업로드 일부\]([\s\S]*?)(?=\[매칭 문서 일부\]|$)/);
+    if (uploadedMatch) {
+      uploaded = uploadedMatch[1].trim();
+    }
+  }
+  
+  if (parts.length >= 2) {
+    // 두 번째 부분에서 [매칭 문서 일부] 내용 추출
+    const existingMatch = parts[1].match(/\[매칭 문서 일부\]([\s\S]*?)(?=\[업로드 일부\]|$)/);
+    if (existingMatch) {
+      existing = existingMatch[1].trim();
+    }
+  }
+  
+  // 텍스트 정리 (너무 긴 경우 자르기)
+  uploaded = uploaded.length > 300 ? uploaded.substring(0, 300) + '...' : uploaded;
+  existing = existing.length > 300 ? existing.substring(0, 300) + '...' : existing;
+  
+  return { uploaded, existing };
+};
+
 // 시뮬레이션 API 응답 생성
 const generateMockAPIResponse = (filename) => {
   const randomScore = Math.random() * 40 + 50; // 50-90 사이의 랜덤 점수
@@ -405,93 +438,93 @@ const runSimilarityCheck = async (req, res) => {
     
     console.log('📈 분석 결과: 유사도', similarityScore + '%', isSimilar ? '✅ 유사과목 인정' : '❌ 유사과목 미인정');
 
-    // API 응답에서 실제 분석 결과 생성
+    // per_doc 배열에서 LLM이 유사하다고 판정한 스니펫만 추출
     const similarPoints = [];
-    const differentPoints = [];
-    const recommendations = [];
+    const differentPoints = []; // 빈 배열로 유지 (기존 코드 호환성)
+    const recommendations = []; // 빈 배열로 유지 (기존 코드 호환성)
 
-    // details 배열에서 실제 매칭 내용 분석
-    if (similarityResult.details && similarityResult.details.length > 0) {
-      const highScoreCount = similarityResult.details.filter(detail => detail.score > 0.7).length;
-      const lowScoreCount = similarityResult.details.filter(detail => detail.score < 0.5).length;
+    console.log('🔍 similarityResult 구조 확인:', {
+      hasPerDoc: !!similarityResult.per_doc,
+      hasLlmReport: !!similarityResult.llm_report,
+      hasLlmReportPerDoc: !!similarityResult.llm_report?.per_doc,
+      perDocLength: similarityResult.per_doc?.length || 0,
+      llmReportPerDocLength: similarityResult.llm_report?.per_doc?.length || 0,
+      llmReportKeys: similarityResult.llm_report ? Object.keys(similarityResult.llm_report) : []
+    });
+
+    // llm_report.per_doc 또는 per_doc 사용
+    const perDocArray = similarityResult.llm_report?.per_doc || similarityResult.per_doc;
+    
+    if (perDocArray && perDocArray.length > 0) {
+      console.log(`🔍 per_doc 분석: 총 ${perDocArray.length}개 문서 검토`);
       
-      console.log(`🔍 매칭 분석: 총 ${similarityResult.details.length}개 (높은 유사도: ${highScoreCount}개, 낮은 유사도: ${lowScoreCount}개)`);
+      // 각 문서의 verdict 확인
+      perDocArray.forEach((doc, index) => {
+        console.log(`📋 문서 ${index + 1}:`, {
+          docId: doc.doc_id,
+          verdict: doc.llm_parsed?.verdict,
+          hasLlmParsed: !!doc.llm_parsed,
+          confidence: doc.llm_parsed?.confidence
+        });
+      });
       
-      // 유사도 높은 순으로 정렬 (5개 미만이면 모두 표시)
-      const filteredDetails = similarityResult.details
-        .filter(detail => detail.score > 0.7) // 높은 유사도만
-        .sort((a, b) => b.score - a.score); // 유사도 높은 순
+      // LLM이 "유사"라고 판정한 문서들만 필터링
+      const similarDocs = perDocArray.filter(doc => 
+        doc.llm_parsed && doc.llm_parsed.verdict === "유사"
+      );
       
-      const sortedDetails = filteredDetails.length <= 5 
-        ? filteredDetails // 5개 이하면 모두 표시
-        : filteredDetails.slice(0, 5); // 5개 초과면 상위 5개만
+      console.log(`✅ LLM이 유사하다고 판정한 문서: ${similarDocs.length}개`);
       
-      sortedDetails.forEach((detail, index) => {
-        const queryText = detail.query_preview || '';
-        const refText = detail.ref_chunk_preview || '';
-        const scorePercent = Math.round(detail.score * 100);
+      // 유사하다고 판정된 각 스니펫의 rationale과 query_view_preview만 추출
+      similarDocs.forEach((doc, index) => {
+        const rationale = doc.llm_parsed?.rationale_ko || '';
+        const queryPreview = doc.query_view_preview || '';
+        const confidence = doc.llm_parsed?.confidence || 0;
         
-        // 업로드한 문서의 내용 정제
-        const cleanQueryText = cleanTextForDisplay(queryText);
-        // 기존 문서의 내용 정제
-        const cleanRefText = cleanTextForDisplay(refText);
-        
-        if (cleanQueryText && cleanRefText) {
-          // 업로드한 문서와 기존 문서를 명확히 구분해서 표시
+        if (rationale && queryPreview) {
+          // query_view_preview를 업로드 일부와 매칭 문서 일부로 분리
+          const previewParts = parseQueryPreview(queryPreview);
+          
           similarPoints.push({
-            uploadedContent: cleanQueryText,
-            existingContent: cleanRefText,
-            similarity: scorePercent
+            rationale: rationale,
+            uploadedContent: previewParts.uploaded,
+            existingContent: previewParts.existing,
+            confidence: Math.round(confidence * 100),
+            docId: doc.doc_id || `문서${index + 1}`
+          });
+          
+          console.log(`✅ 유사 스니펫 추가:`, {
+            docId: doc.doc_id,
+            rationaleLength: rationale.length,
+            queryPreviewLength: queryPreview.length,
+            confidence: Math.round(confidence * 100)
           });
         }
       });
       
-      // 낮은 유사도 매칭 (5개 미만이면 모두 표시)
-      const filteredLowDetails = similarityResult.details
-        .filter(detail => detail.score < 0.5)
-        .sort((a, b) => a.score - b.score); // 낮은 유사도 순
-        
-      const lowScoreDetails = filteredLowDetails.length <= 5 
-        ? filteredLowDetails // 5개 이하면 모두 표시
-        : filteredLowDetails.slice(0, 5); // 5개 초과면 상위 5개만
-        
-      lowScoreDetails.forEach((detail) => {
-        const queryText = detail.query_preview || '';
-        const cleanQueryText = cleanTextForDisplay(queryText);
-        if (cleanQueryText) {
-          differentPoints.push(cleanQueryText);
+      // 비유사하다고 판정된 문서들의 rationale을 differentPoints에 추가
+      const differentDocs = perDocArray.filter(doc => 
+        doc.llm_parsed && doc.llm_parsed.verdict === "비유사"
+      );
+      
+      differentDocs.forEach((doc) => {
+        const rationale = doc.llm_parsed?.rationale_ko || '';
+        if (rationale) {
+          differentPoints.push(rationale);
         }
       });
+      
+      console.log(`📊 분석 완료: 유사 스니펫 ${similarDocs.length}개, 비유사 스니펫 ${differentDocs.length}개 발견`);
     } else {
-      console.log('⚠️ 매칭 결과 없음');
-    }
-
-    // details 배열에서만 실제 내용 추출 (하드코딩 제거)
-    // API 응답의 details 배열이 유일한 실제 분석 데이터 소스
-    
-    // 권고사항 생성 (details 내용 기반)
-    if (similarityResult.details && similarityResult.details.length > 0) {
-      const highScoreDetails = similarityResult.details.filter(detail => detail.score > 0.7);
-      const lowScoreDetails = similarityResult.details.filter(detail => detail.score < 0.5);
-      
-      if (highScoreDetails.length > 0) {
-        recommendations.push("높은 유사도 매칭이 발견되어 유사과목 인정 가능성이 높습니다.");
-      }
-      
-      if (lowScoreDetails.length > 0) {
-        recommendations.push("낮은 유사도 매칭이 발견되어 추가적인 내용 보강이 필요합니다.");
-      }
-      
-      if (similarityResult.details.length === 0) {
-        recommendations.push("매칭되는 내용이 없어 보건교육 관련 내용을 추가해야 합니다.");
-      }
+      console.log('⚠️ per_doc 데이터 없음');
     }
     
     // 이미 상위 5개로 제한했으므로 중복 제거만 수행
     const uniqueSimilarPoints = [...new Set(similarPoints)];
     const uniqueDifferentPoints = [...new Set(differentPoints)];
     
-    console.log(`📝 분석 완료: 유사한 점 ${uniqueSimilarPoints.length}개, 다른 점 ${uniqueDifferentPoints.length}개, 권고사항 ${recommendations.length}개`);
+    console.log(`📝 분석 완료: 유사 스니펫 ${uniqueSimilarPoints.length}개 저장`);
+    console.log(`🔍 유사 스니펫 상세:`, JSON.stringify(uniqueSimilarPoints, null, 2));
 
     await pool.execute(
       `INSERT INTO review_results (upload_id, user_id, subject_name, similarity_score, is_similar, review_criteria, similar_points, different_points, recommendation, api_response) 
@@ -505,7 +538,8 @@ const runSimilarityCheck = async (req, res) => {
         JSON.stringify({
           "문서 구조 유사도": Math.round((topResult?.score_doc || 0) * 100),
           "내용 유사도": Math.round((topResult?.score_chunk || 0) * 100),
-          "매칭 청크 수": similarityResult.details?.length || 0
+          "매칭 청크 수": similarityResult.details?.length || 0,
+          "교과목 목적의 유사성": similarPoints.length > 0 ? "유사함" : "유사하지 않음"
         }),
         JSON.stringify(uniqueSimilarPoints),
         JSON.stringify(uniqueDifferentPoints),

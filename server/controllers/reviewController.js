@@ -202,7 +202,9 @@ const getUserReviews = async (req, res) => {
   try {
     const userId = req.user.id;
     const { page = 1, limit = 10, isSimilar } = req.query;
-    const offset = (page - 1) * limit;
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+    const offset = (pageNum - 1) * limitNum;
 
     let query = `
       SELECT r.*, u.original_name, u.upload_date
@@ -217,8 +219,12 @@ const getUserReviews = async (req, res) => {
       params.push(isSimilar === 'true');
     }
 
-    query += ' ORDER BY r.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    query += ` ORDER BY r.created_at DESC LIMIT ${offset}, ${limitNum}`;
+
+    console.log('🔍 SQL 쿼리:', query);
+    console.log('🔍 매개변수:', params);
+    console.log('🔍 매개변수 개수:', params.length);
+    console.log('🔍 쿼리 물음표 개수:', (query.match(/\?/g) || []).length);
 
     const [reviews] = await pool.execute(query, params);
 
@@ -230,36 +236,60 @@ const getUserReviews = async (req, res) => {
       let recommendations = [];
 
       // JSON 필드 파싱
+      console.log('🔍 Review 데이터 확인:', {
+        id: review.id,
+        hasReviewCriteria: !!review.review_criteria,
+        hasSimilarPoints: !!review.similar_points,
+        similarPointsType: typeof review.similar_points,
+        similarPointsValue: review.similar_points
+      });
+
       if (review.review_criteria) {
-        try {
-          criteriaScores = JSON.parse(review.review_criteria);
-        } catch (e) {
-          console.log('review_criteria 파싱 오류:', e);
-          criteriaScores = {};
+        if (typeof review.review_criteria === 'string') {
+          try {
+            criteriaScores = JSON.parse(review.review_criteria);
+          } catch (e) {
+            console.log('review_criteria 파싱 오류:', e);
+            criteriaScores = {};
+          }
+        } else {
+          criteriaScores = review.review_criteria;
         }
       }
       if (review.similar_points) {
-        try {
-          similarPoints = JSON.parse(review.similar_points);
-        } catch (e) {
-          console.log('similar_points 파싱 오류:', e);
-          similarPoints = [];
+        if (typeof review.similar_points === 'string') {
+          try {
+            similarPoints = JSON.parse(review.similar_points);
+          } catch (e) {
+            console.log('similar_points 파싱 오류:', e);
+            similarPoints = [];
+          }
+        } else {
+          similarPoints = review.similar_points;
         }
       }
       if (review.different_points) {
-        try {
-          differentPoints = JSON.parse(review.different_points);
-        } catch (e) {
-          console.log('different_points 파싱 오류:', e);
-          differentPoints = [];
+        if (typeof review.different_points === 'string') {
+          try {
+            differentPoints = JSON.parse(review.different_points);
+          } catch (e) {
+            console.log('different_points 파싱 오류:', e);
+            differentPoints = [];
+          }
+        } else {
+          differentPoints = review.different_points;
         }
       }
       if (review.recommendation) {
-        try {
-          recommendations = JSON.parse(review.recommendation);
-        } catch (e) {
-          console.log('recommendation 파싱 오류:', e);
-          recommendations = [];
+        if (typeof review.recommendation === 'string') {
+          try {
+            recommendations = JSON.parse(review.recommendation);
+          } catch (e) {
+            console.log('recommendation 파싱 오류:', e);
+            recommendations = [];
+          }
+        } else {
+          recommendations = review.recommendation;
         }
       }
 
