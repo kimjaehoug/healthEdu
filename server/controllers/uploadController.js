@@ -248,7 +248,7 @@ const callSimilarityAPI = async (filePath, originalName) => {
       headers: {
         ...formData.getHeaders(),
       },
-      timeout: 30000 // 30초 타임아웃
+      timeout: 120000 // 30초 타임아웃
     });
 
     console.log('✅ 외부 API 응답 성공');
@@ -537,9 +537,11 @@ const runSimilarityCheck = async (req, res) => {
         isSimilar,
         JSON.stringify({
           "문서 구조 유사도": Math.round((topResult?.score_doc || 0) * 100),
-          "내용 유사도": Math.round((topResult?.score_chunk || 0) * 100),
+          "내용 유사도": Math.round(((similarityResult.doc_only?.top?.[0]?.score || 0) + (similarityResult.chunk_only?.top?.[0]?.score || 0)) / 2 * 100),
           "매칭 청크 수": similarityResult.details?.length || 0,
-          "교과목 목적의 유사성": similarPoints.length > 0 ? "유사함" : "유사하지 않음"
+          "교과목 목적의 유사성": similarPoints.length > 0 ? "유사함" : "유사하지 않음",
+          "문서 유사도": Math.round((similarityResult.doc_only?.top?.[0]?.score || 0) * 100),
+          "문단 유사도": Math.round((similarityResult.chunk_only?.top?.[0]?.score || 0) * 100)
         }),
         JSON.stringify(uniqueSimilarPoints),
         JSON.stringify(uniqueDifferentPoints),
